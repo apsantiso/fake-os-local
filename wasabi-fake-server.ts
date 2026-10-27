@@ -375,6 +375,8 @@ app.delete('/api/v1/sub-accounts/:id', (req: Request, res: Response) => {
   const sa = findSubAccount(req.params.id);
   if (!sa) return res.json(fail('404', `Sub-account ${req.params.id} not found`));
 
+  if (sa.deleted) return res.json(fail('ENT-E-0005', `Sub-account ${req.params.id} is already pending deletion`));
+
   sa.deleted = true;
   persist();
   res.json(ok(null));
@@ -538,6 +540,30 @@ app.post('/api/v1/channel-accounts', (req: Request, res: Response) => {
   channelAccounts.push(created);
   persist();
   res.json(ok(created));
+});
+
+// PUT /v1/channel-accounts/:id
+app.put('/api/v1/channel-accounts/:id', (req: Request, res: Response) => {
+  const ca = channelAccounts.find((c) => c.id === Number(req.params.id));
+  if (!ca) return res.json(fail('404', `Channel account ${req.params.id} not found`));
+
+  Object.assign(ca, req.body);
+  persist();
+  res.json(ok(null));
+});
+
+// DELETE /v1/channel-accounts/:id
+// Like WACM, it only unlinks the sub-accounts; they stay alive under their control account.
+app.delete('/api/v1/channel-accounts/:id', (req: Request, res: Response) => {
+  const index = channelAccounts.findIndex((c) => c.id === Number(req.params.id));
+  if (index === -1) return res.json(fail('404', `Channel account ${req.params.id} not found`));
+
+  subAccounts
+    .filter((sa) => sa.channelAccountId === channelAccounts[index].id)
+    .forEach((sa) => Object.assign(sa, { channelAccountId: null, channelAccountName: null }));
+  channelAccounts.splice(index, 1);
+  persist();
+  res.json(ok(null));
 });
 
 app.listen(PORT, () => {
